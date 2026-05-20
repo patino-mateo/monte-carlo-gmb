@@ -1,0 +1,78 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import yfinance as yf
+
+def ultimate_stock_simulator(ticker, days=300, iterations=100000, target_price=None):
+    # 1. Data Acquisition & Log Returns
+    df = yf.download(ticker, period="30y", progress=False)
+    data = df['Close'][ticker] if isinstance(df.columns, pd.MultiIndex) else df['Close']
+    log_returns = np.log(data / data.shift(1)).dropna()
+    
+    # 2. Parameters
+    mu = log_returns.mean()
+    sigma = log_returns.std()
+    last_price = float(data.iloc[-1])
+    if target_price is None: target_price = last_price * 1.2 # Default 20% gain target
+    
+    # 3. Geometric Brownian Motion Engine
+    drift = mu - (0.5 * sigma**2)
+    shocks = np.random.normal(0, 1, (iterations, days))
+    daily_returns = np.exp(drift + sigma * shocks)
+    
+    all_paths = np.zeros((iterations, days + 1))
+    all_paths[:, 0] = last_price
+    for t in range(1, days + 1):
+        all_paths[:, t] = all_paths[:, t-1] * daily_returns[:, t-1]
+    
+    final_prices = all_paths[:, -1]
+    
+    # 4. Advanced Metrics
+    # Sharpe Ratio (Annualized, assuming 0% risk-free rate for simplicity)
+    sharpe = (log_returns.mean() * 252) / (log_returns.std() * np.sqrt(252))
+    
+    # Max Drawdown (The "Pain" Metric)
+    peak = np.maximum.accumulate(all_paths, axis=1)
+    drawdowns = (all_paths - peak) / peak
+    max_drawdowns = np.min(drawdowns, axis=1)
+    avg_max_drawdown = np.mean(max_drawdowns) * 100
+    
+    # Target Probabilities
+    prob_hit_target = (np.any(all_paths >= target_price, axis=1).sum() / iterations) * 100
+    var_95 = np.percentile(final_prices, 5)
+    
+    # 5. Visualization
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 7))
+    
+    # Chart 1: The Journey (Paths + Confidence Intervals)
+    ax1.plot(all_paths[:500].T, color='gray', alpha=0.02) # Plot subset for speed
+    ax1.plot(np.median(all_paths, axis=0), color='blue', lw=3, label='Median Path')
+    ax1.fill_between(range(days+1), np.percentile(all_paths, 5, axis=0), 
+                     np.percentile(all_paths, 95, axis=0), color='blue', alpha=0.1, label='90% Confidence')
+    ax1.axhline(target_price, color='green', ls='--', label=f'Target: ${target_price:.2f}')
+    ax1.set_title(f"{ticker} Price Paths & Uncertainty Cone")
+    ax1.legend()
+
+    # Chart 2: The Destination (Histogram + Risk Stats)
+    ax2.hist(final_prices, bins=50, color='skyblue', edgecolor='black', alpha=0.7)
+    ax2.axvline(np.median(final_prices), color='blue', lw=3, label='Median Outcome')
+    ax2.axvline(var_95, color='red', lw=2, ls=':', label=f'95% VaR: ${var_95:.2f}')
+    ax2.set_title("Distribution of Final Prices")
+    ax2.legend()
+    
+    plt.tight_layout()
+    plt.show()
+
+    # 6. Final Report
+    print(f"--- {ticker} QUANTITATIVE REPORT ---")
+    print(f"Current Price:      ${last_price:.2f}")
+    print(f"Sharpe Ratio:       {sharpe:.2f} (Reward vs Risk)")
+    print(f"Avg. Max Drawdown:  {avg_max_drawdown:.1f}% (Expected 'Pain')")
+    print(f"95% VaR:            ${var_95:.2f} (The 'Floor')")
+    print(f"Prob. Hit Target:   {prob_hit_target:.1f}% (Chance of hitting ${target_price:.2f})")
+
+ticker = input("Enter the stock ticker you want to simulate: ").strip().upper()
+
+target_price = float(input(f"Enter a target price for {ticker}: "))
+
+ultimate_stock_simulator(f"{ticker}", target_price=target_price)

@@ -50,7 +50,7 @@ def ultimate_stock_simulator(ticker, days=300, iterations=100000, target_price=N
     ax1.fill_between(range(days+1), np.percentile(all_paths, 5, axis=0), 
                      np.percentile(all_paths, 95, axis=0), color='blue', alpha=0.1, label='90% Confidence')
     ax1.axhline(target_price, color='green', ls='--', label=f'Target: ${target_price:.2f}')
-    ax1.set_title(f"{ticker} Price Paths & Uncertainty Cone")
+    ax1.set_title(f"{ticker} Price Paths & Uncertainty Cone \n Current Price: ${last_price:.2f}")
     ax1.legend()
 
     # Chart 2: The Destination (Histogram + Risk Stats)
